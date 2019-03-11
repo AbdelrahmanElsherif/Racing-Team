@@ -1,0 +1,209 @@
+#include <xc.h>
+#include <libpic30.h>
+#include <libq.h>
+
+#define FCY 8000000UL //clock 8 MHz//PLL 4X
+#define MILLISEC FCY/8000// 1 mSec delay constant
+
+#define EN LATEbits.LATE3
+#define RW LATEbits.LATE1
+#define RS LATEbits.LATE2
+
+
+// function prototype
+void lcd_init();
+void lcd4_init();
+void lcd_send_command(unsigned char cmd);
+void lcd4_sendcommand(unsigned char cmd);
+void lcd_SendData(unsigned char data);
+void lcd4_SendData(unsigned char data);
+void lcd_clear(void);
+void lcd_set_cursor(unsigned char x,unsigned char y);
+void lcd_SendString(char *str);
+void lcd_out(unsigned char x , unsigned char y ,char*str );
+void _delay_ms(unsigned int N);
+char* convertData(unsigned int var);
+
+
+int main(void) 
+{
+   lcd4_init();
+  
+   
+    while(1)
+    {
+        lcd_out(0,0,"H!");
+    
+     
+    }
+    
+    return 0;
+}
+void lcd_init()
+{
+    TRISB=0;//output for data
+    TRISEbits.TRISE3=0;
+    TRISEbits.TRISE1=0;
+    TRISEbits.TRISE2=0;
+    _delay_ms(15);
+    lcd_send_command(0x06);
+    _delay_ms(1);
+    lcd_send_command(0x0E);
+        _delay_ms(1);
+        lcd_send_command(0x14);
+        lcd_send_command(0x38);
+            _delay_ms(1);
+            lcd_send_command(0x40);
+        _delay_ms(1);
+        lcd_send_command(0x80);
+    
+}
+
+void lcd4_init()
+{
+    TRISB=0;
+    TRISEbits.TRISE3=0;
+    TRISEbits.TRISE1=0;
+    TRISEbits.TRISE2=0;
+    _delay_ms(20);
+ lcd4_sendcommand(0x30);
+ _delay_ms(5);
+ lcd4_sendcommand(0x30); 
+_delay_ms(1);
+ lcd4_sendcommand(0x30);
+ _delay_ms(1);
+ lcd4_sendcommand(0x02);
+ _delay_ms(1);
+  lcd4_sendcommand(0x28);
+  _delay_ms(1);
+   lcd4_sendcommand(0x06);
+   _delay_ms(1);
+  lcd4_sendcommand(0x14);
+ _delay_ms(1);
+  lcd4_sendcommand(0x0E);
+        _delay_ms(1);
+ lcd4_sendcommand(0x40);
+        _delay_ms(1);
+        lcd4_sendcommand(0x80);
+ 
+}
+
+
+void lcd_send_command(unsigned char cmd)
+{
+    LATB=cmd;
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+}
+
+
+void lcd4_sendcommand(unsigned char cmd)
+{ 
+   
+   LATB = (cmd & 0xf0);
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(10);
+    LATB = ((cmd << 4)&0xf0);
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+    
+    
+}
+
+void lcd_SendData(unsigned char data)
+{
+    LATB =data;
+    RS=1;
+    RW=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    RS=0;
+    LATB=1;
+    
+}
+
+void lcd4_SendData(unsigned char data)
+
+{
+    LATB =  (data & 0xf0);
+    RS=1;
+    RW=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(10);
+    
+    LATB= ((data << 4)&0xf0);
+    RW=0;
+    RS=1;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+    
+}
+void lcd_clear(void)
+{
+ lcd4_sendcommand(0x01);   
+ _delay_ms(2);
+}
+void lcd_set_cursor(unsigned char x , unsigned char y)
+{
+    if(y==0)
+    {
+        lcd4_sendcommand(0x80+x);
+    }
+    else
+    {
+        lcd4_sendcommand(0xC0+x);
+    }
+}
+void lcd_SendString(char *str)
+{
+    while(*str != '\0')
+    {
+        lcd4_SendData(*str);
+        str++;
+    }
+}
+void lcd_out(unsigned char x , unsigned char y ,char*str )
+{
+    lcd_set_cursor(x,y);
+    lcd_SendString(str);
+    
+}
+char* convertData(unsigned int var)
+{
+    static char data[17];
+    char*arr=&data[16];
+    *arr='\0';
+    while(var !=0)
+    {
+        arr--;
+        *arr=(var%10)+'0';
+        var=var/10;
+    }
+    return arr;
+}
+void _delay_ms(unsigned int N)
+{
+    unsigned int j;
+    while(N--)
+    for(j=0 ; j < MILLISEC ; j++);
+}
