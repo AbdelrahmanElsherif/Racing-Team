@@ -1,0 +1,562 @@
+// DSPIC30F4015 1Configuration Bit Settings
+
+// 'C' source line configuration statements
+
+// FOSC
+
+/* #pragma config FPR = XT_PLL4          // Primary Oscillator Mode (XT w/PLL 4x)
+#pragma config FOS = PRI                // Oscillator Source (Primary Oscillator)
+#pragma config FCKSMEN = CSW_FSCM_OFF   // Clock Switching and Monitor (Sw Disabled, Mon Disabled)
+
+// FWDT
+#pragma config FWPSB = WDTPSB_16        // WDT Prescaler B (1:16)
+#pragma config FWPSA = WDTPSA_512       // WDT Prescaler A (1:512)
+#pragma config WDT = WDT_OFF            // Watchdog Timer (Disabled)
+
+// FBORPOR
+#pragma config FPWRT = PWRT_64          // POR Timer Value (64ms)
+#pragma config BODENV = BORV20          // Brown Out Voltage (Reserved)
+#pragma config BOREN = PBOR_ON          // PBOR Enable (Enabled)
+#pragma config LPOL = PWMxL_ACT_HI      // Low-side PWM Output Polarity (Active High)
+#pragma config HPOL = PWMxH_ACT_HI      // High-side PWM Output Polarity (Active High)
+#pragma config PWMPIN = RST_PWMPIN      // PWM Output Pin Reset (Control with HPOL/LPOL bits)
+#pragma config MCLRE = MCLR_EN          // Master Clear Enable (Enabled)
+
+// FGS
+#pragma config GWRP = GWRP_OFF          // General Code Segment Write Protect (Disabled)
+#pragma config GCP = CODE_PROT_OFF      // General Segment Code Protection (Disabled)
+
+// FICD
+#pragma config ICS = ICS_PGD            // Comm Channel Select (Use PGC/EMUC and PGD/EMUD)
+*/
+#include <xc.h>
+#include <libpic30.h>
+#include <libq.h>
+#include <p30F4011.h>
+
+#define FCY 8000000UL //clock 8 MHz//PLL 4X
+#define MILLISEC FCY/8000// 1 mSec delay constant
+
+#define EN LATEbits.LATE3
+#define RW LATEbits.LATE1
+#define RS LATEbits.LATE2
+
+#define uint16_t short
+#define uint8_t char
+
+typedef struct
+  {
+  uint16_t sid;    
+  uint8_t length;
+  uint8_t data[8];
+  }CANMSG;
+
+
+// function prototype
+void lcd_init();
+void lcd4_init();
+void lcd_send_command(unsigned char cmd);
+void lcd4_sendcommand(unsigned char cmd);
+void lcd_SendData(unsigned char data);
+void lcd4_SendData(unsigned char data);
+void lcd_clear(void);
+void lcd_set_cursor(unsigned char x,unsigned char y);
+void lcd_SendString(char *str);
+void lcd_out(unsigned char x , unsigned char y ,char*str );
+void _delay_ms(unsigned int N);
+char* convertData(unsigned int var);
+// CAN Function Prototypes
+void CanInit(void);                                 /* Call this function first */
+void CanSetMask(uint8_t mask_no, uint16_t mask);    /* Then set up masks */ 
+void CanSetFilter(uint8_t filter_no, uint16_t sid); /* and filters */
+void CanConfig(void);                               /* Then call this function last, to enable can. */
+
+void CanSetPriority(uint8_t buffer, uint8_t priority);
+void CanSendMessage(const CANMSG *message);
+int CanReceiveMessage(CANMSG *message);    /* Returns True if message received. */
+void Enter_Normal_Mode(void);
+void Enter_loopback_Mode(void);
+
+static uint8_t getTxbuffer(void);
+
+CANMSG Receive;
+
+int main(void) 
+{
+  
+    CanInit();
+   CanSetMask(0,0x7FF);
+    CanSetMask(1,0x7FF);
+    CanSetFilter(0,0x2AA);
+    CanConfig();
+    Enter_Normal_Mode();
+    lcd4_init();
+    lcd_out(0,1,"Hi!");
+   
+    while(1)
+    {
+        lcd_out(13,1,"H!");
+        if(CanReceiveMessage(&Receive))
+        {
+            lcd_out(0,0,"DATA =");
+            lcd_out(7,0,&Receive.data[0]);
+        }
+        else
+        {
+            lcd_out(0,0,"It'sNotWorking");
+        }
+    }
+    
+    
+    
+    return 0;
+}
+void lcd_init()
+{
+    TRISB=0;//output for data
+    TRISEbits.TRISE3=0;
+    TRISEbits.TRISE1=0;
+    TRISEbits.TRISE2=0;
+    _delay_ms(15);
+    lcd_send_command(0x06);
+    _delay_ms(1);
+    lcd_send_command(0x0E);
+        _delay_ms(1);
+        lcd_send_command(0x14);
+        lcd_send_command(0x38);
+            _delay_ms(1);
+            lcd_send_command(0x40);
+        _delay_ms(1);
+        lcd_send_command(0x80);
+    
+}
+
+void lcd4_init()
+{
+    TRISB=0;
+    TRISEbits.TRISE3=0;
+    TRISEbits.TRISE1=0;
+    TRISEbits.TRISE2=0;
+    _delay_ms(20);
+ lcd4_sendcommand(0x30);
+ _delay_ms(5);
+ lcd4_sendcommand(0x30); 
+_delay_ms(1);
+ lcd4_sendcommand(0x30);
+ _delay_ms(1);
+ lcd4_sendcommand(0x02);
+ _delay_ms(1);
+  lcd4_sendcommand(0x28);
+  _delay_ms(1);
+   lcd4_sendcommand(0x06);
+   _delay_ms(1);
+  lcd4_sendcommand(0x14);
+ _delay_ms(1);
+  lcd4_sendcommand(0x0E);
+        _delay_ms(1);
+ lcd4_sendcommand(0x40);
+        _delay_ms(1);
+        lcd4_sendcommand(0x80);
+ 
+}
+
+
+void lcd_send_command(unsigned char cmd)
+{
+    LATB=cmd;
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+}
+
+
+void lcd4_sendcommand(unsigned char cmd)
+{ 
+   
+   LATB = (cmd & 0xf0);
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(10);
+    LATB = ((cmd << 4)&0xf0);
+    RW=0;
+    RS=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+    
+    
+}
+
+void lcd_SendData(unsigned char data)
+{
+    LATB =data;
+    RS=1;
+    RW=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    RS=0;
+    LATB=1;
+    
+}
+
+void lcd4_SendData(unsigned char data)
+
+{
+    LATB =  (data & 0xf0);
+    RS=1;
+    RW=0;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(10);
+    
+    LATB= ((data << 4)&0xf0);
+    RW=0;
+    RS=1;
+    EN=0;
+    _delay_ms(1);
+    EN=1;
+    _delay_ms(1);
+    LATB=1;
+    
+}
+void lcd_clear(void)
+{
+ lcd4_sendcommand(0x01);   
+ _delay_ms(2);
+}
+void lcd_set_cursor(unsigned char x , unsigned char y)
+{
+    if(y==0)
+    {
+        lcd4_sendcommand(0x80+x);
+    }
+    else
+    {
+        lcd4_sendcommand(0xC0+x);
+    }
+}
+void lcd_SendString(char *str)
+{
+    while(*str != '\0')
+    {
+        lcd4_SendData(*str);
+        str++;
+    }
+}
+void lcd_out(unsigned char x , unsigned char y ,char*str )
+{
+    lcd_set_cursor(x,y);
+    lcd_SendString(str);
+    
+}
+char* convertData(unsigned int var)
+{
+    static char data[17];
+    char*arr=&data[16];
+    *arr='\0';
+    while(var !=0)
+    {
+        arr--;
+        *arr=(var%10)+'0';
+        var=var/10;
+    }
+    return arr;
+}
+void _delay_ms(unsigned int N)
+{
+    unsigned int j;
+    while(N--)
+    for(j=0 ; j < MILLISEC ; j++);
+}
+
+
+
+void CanInit(void)
+  {
+  C1CTRLbits.REQOP = 4;           // Request configuration mode 
+  while(C1CTRLbits.OPMODE != 4){  // Wait until configuration mode entered 
+    ;
+    }
+  }
+
+/*********************************************************************
+* Function Name : CanConfig 
+* Description   : Sets baud rate to 500Kbps with 20Tq for a clock of 10MHz
+                         
+*********************************************************************/
+
+void CanConfig(void)
+  { 
+    /*Baud rate configuration, 
+     Baud_rate = 250KHz, TQ = 250ns, FCAN = FCY, 16TQ*/
+     C1CFG1bits.BRP = 0;       // TQ = 2/FCAN
+     C1CFG1bits.SJW = 1;       //  Synchronized Jump Width = 2TQ
+     C1CFG2bits.PRSEG = 5;     // Propagation time = 6TQ
+     C1CFG2bits.SEG1PH = 4;    // Phase Segment 1 = 5TQ 
+     C1CFG2bits.SAM = 0;       // once sample 
+     C1CFG2bits.SEG2PHTS = 1;  // Segment 2 >> Free programming 
+     C1CFG2bits.SEG2PH = 3;    // Phase Segment 2 = 4TQ  
+  
+     //Disable interrupts
+     C1INTEbits.TX0IE = 0;
+     C1INTEbits.TX1IE = 0;
+     C1INTEbits.TX2IE = 0;
+    
+     //FCAN = FCY
+     C1CTRLbits.CANCKS = 1; //FCAN = FCY
+     
+     C1RX0CONbits.RXFUL=0;
+     C1RX1CONbits.RXFUL=0;
+  }
+
+/*********************************************************************
+* Function Name : CanSetFilter
+* Description   : This function sets the acceptance filter, SID for 
+                  standard length identifiers.
+
+* Parameters    : uint16_t: filter_no:  (Filter number 0-5)
+*                 uint16_t: sid:        (SID value)
+*********************************************************************/
+
+void CanSetFilter(uint8_t filter_no, uint16_t sid)
+  { 
+  switch(filter_no)
+    {
+    case 0: C1RXF0SID = 0;
+            C1RXF0SIDbits.SID = sid; 
+            break;
+    case 1: C1RXF1SID = 0;
+            C1RXF1SIDbits.SID = sid; 
+            break;    
+    default:C1RXF0SID = 0;
+            C1RXF0SIDbits.SID = sid; 
+            break;
+    }
+  }
+
+/*************************************************************************
+* Function Name : CanSetMask
+* Description   : This function sets the values for the acceptance 
+*                 filter masks for standard length identifiers.
+
+* Parameters    : uint16_t: mask_no:  (Mask number 0-1)
+*                 uint16_t: mask:     (Mask value)        
+**************************************************************************/
+
+void CanSetMask(uint8_t mask_no, uint16_t mask)
+  { 
+  switch(mask_no)
+    {
+    case 0: C1RXM0SID = 0x0001;
+            C1RXM0SIDbits.SID = mask; 
+            break;
+    case 1: C1RXM1SID = 0x0001;
+            C1RXM1SIDbits.SID = mask; 
+            break;
+    
+    default:C1RXM0SID = 0x0001;
+            C1RXM0SIDbits.SID = mask; 
+            break;
+  }
+}
+
+/*************************************************************************
+* Function Name : CanSetPriority
+* Description   : This function sets the message transmission  
+*                 priority bits.
+
+* Parameters    : uint16_t: buffer:   (Transmit buffer number 0-2) 
+                  uint16_t: priority: (Transmit priority 0-2)        
+**************************************************************************/
+
+void CanSetPriority(uint8_t buffer, uint8_t priority)
+  {
+  priority = (priority > 2U) ? 2U : priority;
+
+  switch(buffer)
+    {
+    case 0: C1TX0CONbits.TXPRI = priority;
+            break;
+    case 1: C1TX1CONbits.TXPRI = priority;
+            break;
+    case 2: C1TX2CONbits.TXPRI = priority;
+            break;
+    default:
+            break;
+    }
+  }  
+  
+/*********************************************************************
+* Function Name : CanSendMessage 
+* Description   : This function writes the message identifier(SID), 
+                  writes the data to be transmitted into the Transmit buffer
+*                 and sets the corresponding Transmit request bit.
+
+* Parameters    : Pointer to structure CANMSG defined in can.h
+*********************************************************************/ 
+
+void CanSendMessage(const CANMSG *message)
+  {
+  uint8_t buffer;
+  uint16_t ix = ((message->sid & 0x07C0) << 5) | ((message->sid & 0x003F) << 2); 
+
+  buffer = getTxbuffer(); 
+  
+  switch(buffer)
+    {
+    case 0: C1TX0SID = ix;
+            break;
+    case 1: C1TX1SID = ix;
+            break;
+    case 2: C1TX2SID = ix;
+            break;
+
+    default:C1TX0SID = ix;
+            break;
+    }
+
+  for(ix = 0; ix < message->length; ix++)
+    {
+    switch(buffer)
+      {
+      case 0: *((uint8_t *)&C1TX0B1+ix) = message->data[ix];
+              break;
+      case 1: *((uint8_t *)&C1TX1B1+ix) = message->data[ix];
+              break;
+      case 2: *((uint8_t *)&C1TX2B1+ix) = message->data[ix];
+              break;
+      default:*((uint8_t *)&C1TX0B1+ix) = message->data[ix];
+              break;
+      }
+    }
+
+  switch(buffer)
+    {
+    case 0: C1TX0DLC = 0x0000;
+            C1TX0DLCbits.DLC = message->length;
+            C1TX0CONbits.TXREQ = 1;
+            break;
+    case 1: C1TX1DLC = 0x0000;
+            C1TX1DLCbits.DLC = message->length;
+            C1TX1CONbits.TXREQ = 1;
+            break;
+    case 2: C1TX2DLC = 0x0000;
+            C1TX2DLCbits.DLC = message->length;
+            C1TX2CONbits.TXREQ = 1;
+            break;
+    default:break;
+    }
+  }
+
+/*************************************************************************
+* Function Name : CanReceiveMessage
+* Description   : If a message has been received, read the data from 
+                  the receive buffer into the structure CANMSG
+                  and clear the RXFUL bit.
+
+* Parameters    : Pointer to structure CANMSG defined in can.h
+* Returns       : True if message received else False.
+**************************************************************************/
+
+int CanReceiveMessage(CANMSG *message)
+  {
+  uint8_t ix, buffer = 0xff;
+
+  if(C1RX0CONbits.RXFUL){
+    buffer = 0;
+    }
+  else if(C1RX1CONbits.RXFUL){
+    buffer = 1;
+    }
+
+  if(buffer != 0xff)
+    {
+    switch(buffer)
+      {
+      case 0: message->sid = (C1RX0SID >> 2) & 0x07ff;
+              message->length = C1RX0DLCbits.DLC;
+              break;
+      case 1: message->sid = (C1RX1SID >> 2) & 0x07ff;
+              message->length = C1RX1DLCbits.DLC;
+              break;
+      default:
+              break;
+      }  
+
+    for(ix = 0; ix < message->length; ix++)
+      {
+      switch(buffer)
+        {
+        case 0: message->data[ix] = *((uint8_t *)&C1RX0B1 + ix);
+                break;
+        case 1: message->data[ix] = *((uint8_t *)&C1RX1B1 + ix);
+                break;
+        default:
+              break;
+        }
+      }
+
+    switch(buffer)
+      {
+      case 0: C1RX0CONbits.RXFUL = 0;
+              break;
+      case 1: C1RX1CONbits.RXFUL = 0;
+              break;
+      default:
+              break;  
+      }
+    } 
+/*  if (buffer == 0 || buffer ==1)
+      return 1;
+  else 
+      return 0 ;*/
+  return (buffer != 0xff) ? 1 : 0;   
+  }
+
+/*************************************************************************
+* Function Name : getTxbuffer
+* Description   : Returns an available empty transmit buffer.
+
+* Returns       : Transmit buffer number 0-2.
+**************************************************************************/
+
+static uint8_t getTxbuffer(void)
+  {
+  uint8_t buffer = 0;
+
+  if(C1TX0CONbits.TXREQ == 0){
+    buffer = 0;
+    }
+  else if(C1TX1CONbits.TXREQ == 0){
+    buffer = 1;
+    }
+  else if(C1TX2CONbits.TXREQ == 0){
+    buffer = 2;
+    }
+
+  return buffer;
+  }
+
+void Enter_Normal_Mode(void)
+{
+     C1CTRLbits.REQOP = 0; //Normal mode
+     while(C1CTRLbits.OPMODE != 0);
+}
+
+void Enter_loopback_Mode(void)
+{
+     C1CTRLbits.REQOP = 2; //Normal mode
+     while(C1CTRLbits.OPMODE != 2);
+}
+
